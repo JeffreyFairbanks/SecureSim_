@@ -1,5 +1,5 @@
 # week_1/scada_ui/dashboard.py
-from flask import Flask, render_template_string, jsonify
+from flask import Flask, render_template_string, jsonify, request
 import threading
 import time
 import re
@@ -107,6 +107,17 @@ def dashboard():
               <h1 class="fw-bold text-primary">Water Tank Control System</h1>
               <p class="text-secondary">Week 1 - System Modeling & Control Logic</p>
               <p class="refresh-time">Last updated: <span id="update-time"></span></p>
+              <div class="d-flex justify-content-center">
+                <button id="emergency-stop" class="btn btn-danger btn-lg mt-2 me-2">
+                  <span class="fs-4">⚠️ EMERGENCY STOP</span>
+                </button>
+                <button id="resume-operation" class="btn btn-success btn-lg mt-2 ms-2" disabled>
+                  <span class="fs-4">▶️ RESUME OPERATION</span>
+                </button>
+              </div>
+              <div class="alert mt-3" id="system-status-alert" role="alert">
+                System Status: <strong id="system-status">Running</strong>
+              </div>
             </div>
           </div>
           
@@ -180,6 +191,8 @@ def dashboard():
           const inflowRateElement = document.getElementById('inflow-rate');
           const outflowRateElement = document.getElementById('outflow-rate');
           const controlProgressElement = document.getElementById('control-progress');
+          const systemStatusEl = document.getElementById('system-status');
+          const systemStatusAlert = document.getElementById('system-status-alert');
 
           // Create tank markers for main tank
           const tankMarkers = document.getElementById('tank-markers');
@@ -273,17 +286,40 @@ def dashboard():
                 inflowRateElement.innerText = data.inflow.toFixed(1);
                 outflowRateElement.innerText = data.outflow.toFixed(1);
                 
-                // Simulate control activity (just visual feedback for week 1)
-                const controlPct = Math.min(100, Math.max(0, 50 + (newLevel - 50) * 2));
-                controlProgressElement.style.width = `${controlPct}%`;
-                controlProgressElement.innerText = `Control at ${Math.round(controlPct)}%`;
+                // Update system status display
+                systemStatusEl.innerText = data.system_status || "Running";
+                systemStatusAlert.className = data.is_emergency || data.system_status === "Emergency Stop" 
+                    ? 'alert alert-danger mt-3' 
+                    : 'alert alert-success mt-3';
                 
-                if (controlPct > 70) {
+                // Update button states based on system status
+                const emergencyStopBtn = document.getElementById('emergency-stop');
+                const resumeOperationBtn = document.getElementById('resume-operation');
+                
+                if (data.is_emergency || data.system_status === 'Emergency Stop') {
+                  emergencyStopBtn.disabled = true;
+                  resumeOperationBtn.disabled = false;
+                  
+                  // Show emergency status on progress bar
                   controlProgressElement.className = "progress-bar progress-bar-striped progress-bar-animated bg-danger";
-                } else if (controlPct < 30) {
-                  controlProgressElement.className = "progress-bar progress-bar-striped progress-bar-animated bg-warning";
+                  controlProgressElement.style.width = "100%";
+                  controlProgressElement.innerText = "EMERGENCY SHUTDOWN ACTIVE";
                 } else {
-                  controlProgressElement.className = "progress-bar progress-bar-striped progress-bar-animated bg-success";
+                  emergencyStopBtn.disabled = false;
+                  resumeOperationBtn.disabled = true;
+                  
+                  // Simulate control activity (just visual feedback for week 1)
+                  const controlPct = Math.min(100, Math.max(0, 50 + (newLevel - 50) * 2));
+                  controlProgressElement.style.width = `${controlPct}%`;
+                  controlProgressElement.innerText = `Control at ${Math.round(controlPct)}%`;
+                  
+                  if (controlPct > 70) {
+                    controlProgressElement.className = "progress-bar progress-bar-striped progress-bar-animated bg-danger";
+                  } else if (controlPct < 30) {
+                    controlProgressElement.className = "progress-bar progress-bar-striped progress-bar-animated bg-warning";
+                  } else {
+                    controlProgressElement.className = "progress-bar progress-bar-striped progress-bar-animated bg-success";
+                  }
                 }
 
                 // Update history counter
@@ -302,6 +338,84 @@ def dashboard():
 
           // Periodic updates
           setInterval(updateDashboard, 1000);
+          
+          // Emergency stop button functionality
+          document.getElementById('emergency-stop').addEventListener('click', function() {
+            if (confirm('Are you sure you want to activate the EMERGENCY STOP?')) {
+              fetch('/api/emergency-stop', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({action: 'emergency_stop'})
+              }).then(response => response.json())
+                .then(data => {
+                  console.log('Emergency stop response:', data);
+                  alert('Emergency stop activated!');
+                  // Visual feedback
+                  document.body.style.backgroundColor = '#ffe6e6';
+                  
+                  // Update button state
+                  this.disabled = true;
+                  document.getElementById('resume-operation').disabled = false;
+                  
+                  // Add a system status message
+                  const statusEl = document.getElementById('control-progress');
+                  statusEl.className = "progress-bar progress-bar-striped progress-bar-animated bg-danger";
+                  statusEl.style.width = "100%";
+                  statusEl.innerText = "EMERGENCY SHUTDOWN IN PROGRESS";
+                  
+                  // Update system status display
+                  const systemStatusEl = document.getElementById('system-status');
+                  const systemStatusAlert = document.getElementById('system-status-alert');
+                  systemStatusEl.innerText = "Emergency Stop";
+                  systemStatusAlert.className = 'alert alert-danger mt-3';
+                })
+                .catch(error => {
+                  console.error('Error:', error);
+                  alert('Failed to activate emergency stop!');
+                });
+            }
+          });
+          
+          // Resume operation button functionality
+          document.getElementById('resume-operation').addEventListener('click', function() {
+            if (confirm('Are you sure you want to RESUME OPERATIONS?')) {
+              fetch('/api/resume-operation', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({action: 'resume_operation'})
+              }).then(response => response.json())
+                .then(data => {
+                  console.log('Resume operation response:', data);
+                  alert('System operations resumed!');
+                  // Visual feedback
+                  document.body.style.backgroundColor = '#f8f9fa';
+                  
+                  // Update button state
+                  this.disabled = true;
+                  document.getElementById('emergency-stop').disabled = false;
+                  
+                  // Add a system status message
+                  const statusEl = document.getElementById('control-progress');
+                  statusEl.className = "progress-bar progress-bar-striped progress-bar-animated bg-success";
+                  statusEl.style.width = "50%";
+                  statusEl.innerText = "Control at 50%";
+                  
+                  // Update system status display
+                  const systemStatusEl = document.getElementById('system-status');
+                  const systemStatusAlert = document.getElementById('system-status-alert');
+                  systemStatusEl.innerText = "Running";
+                  systemStatusAlert.className = 'alert alert-success mt-3';
+                })
+                .catch(error => {
+                  console.error('Error:', error);
+                  alert('Failed to resume operations!');
+                });
+            }
+          });
         </script>
       </body>
     </html>
@@ -311,20 +425,36 @@ def dashboard():
 
 @app.route('/api/water-level')
 def api_water_level():
-    global history, timestamps, tank_inflow, tank_outflow
+    global history, timestamps, tank_inflow, tank_outflow, system_status, is_emergency
     
     return jsonify({
         'level': water_level,
         'history': history,
         'timestamps': timestamps,
         'inflow': tank_inflow,
-        'outflow': tank_outflow
+        'outflow': tank_outflow,
+        'system_status': system_status,
+        'is_emergency': is_emergency
     })
 
 
-def update_water_level(new_level, inflow=None, outflow=None):
-    global water_level, history, timestamps, tank_inflow, tank_outflow
+# Emergency stop is now handled directly in main.py
+
+
+# Add system status variables
+system_status = "Running"
+is_emergency = False
+
+def update_water_level(new_level, inflow=None, outflow=None, emergency_state=False):
+    global water_level, history, timestamps, tank_inflow, tank_outflow, system_status, is_emergency
     water_level = new_level
+    
+    # Update emergency flag and system status
+    is_emergency = emergency_state
+    if emergency_state:
+        system_status = "Emergency Stop"
+    else:
+        system_status = "Running"
     
     # Update flow rates if provided
     if inflow is not None:
