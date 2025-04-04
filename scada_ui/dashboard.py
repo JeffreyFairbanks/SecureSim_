@@ -13,6 +13,11 @@ water_level = 10.0
 actual_water_level = 10.0
 tank_inflow = 0.0
 tank_outflow = 0.0
+pressure = 1.0  # Initial pressure value
+inflow_valve_position = 0.0  # Initial inflow valve position (0-1)
+outflow_valve_position = 0.0  # Initial outflow valve position (0-1)
+controller_status = "Initializing controller"  # Controller status message
+outflow_status = "Random outflow enabled - varies automatically"  # Outflow status message
 current_time = datetime.now().strftime('%H:%M:%S')
 timestamps = [current_time] * 5  # Pre-populate with initial timestamps
 history = [water_level] * 5  # Pre-populate with initial water level
@@ -161,10 +166,70 @@ def dashboard():
                 <div class="card-body">
                   <div class="row">
                     <div class="col-md-6">
-                      <h5>Inflow Rate: <span id="inflow-rate">2.0</span> units/sec</h5>
+                      <div class="card mb-3 border-primary">
+                        <div class="card-header bg-primary text-white">
+                          <h5 class="mb-0">Inflow Valve</h5>
+                        </div>
+                        <div class="card-body">
+                          <div class="d-flex align-items-center mb-2">
+                            <h5 class="mb-0 me-2">Flow Rate:</h5>
+                            <h5 class="mb-0 text-primary"><span id="inflow-rate">1.10</span> units/sec</h5>
+                          </div>
+                          <div class="d-flex align-items-center mb-3">
+                            <h5 class="mb-0 me-2">Valve Position:</h5>
+                            <h5 class="mb-0 text-primary"><span id="inflow-valve">0.22</span></h5>
+                          </div>
+                          <div class="progress" style="height: 30px;">
+                            <div id="inflow-valve-indicator" class="progress-bar bg-primary" role="progressbar" 
+                                style="width: 22%;" aria-valuenow="22" aria-valuemin="0" aria-valuemax="100">
+                              22% Open
+                            </div>
+                          </div>
+                          <div class="mt-2 text-center">
+                            <small class="text-muted">Last adjustment: <span id="inflow-message">Adjusting inflow valve based on level error of -13.98</span></small>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <div class="col-md-6">
-                      <h5>Outflow Rate: <span id="outflow-rate">2.0</span> units/sec</h5>
+                      <div class="card mb-3 border-danger">
+                        <div class="card-header bg-danger text-white">
+                          <h5 class="mb-0">Outflow Valve</h5>
+                        </div>
+                        <div class="card-body">
+                          <div class="d-flex align-items-center mb-2">
+                            <h5 class="mb-0 me-2">Flow Rate:</h5>
+                            <h5 class="mb-0 text-danger"><span id="outflow-rate">1.00</span> units/sec</h5>
+                          </div>
+                          <div class="d-flex align-items-center mb-3">
+                            <h5 class="mb-0 me-2">Valve Position:</h5>
+                            <h5 class="mb-0 text-danger"><span id="outflow-valve">0.20</span></h5>
+                          </div>
+                          <div class="progress" style="height: 30px;">
+                            <div id="outflow-valve-indicator" class="progress-bar bg-danger" role="progressbar" 
+                                style="width: 20%;" aria-valuenow="20" aria-valuemin="0" aria-valuemax="100">
+                              20% Open
+                            </div>
+                          </div>
+                          <div class="mt-2 text-center">
+                            <small class="text-muted" id="outflow-message">Random outflow enabled - varies automatically</small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col-md-12">
+                      <div class="card mb-3 border-success">
+                        <div class="card-header bg-success text-white">
+                          <h5 class="mb-0">Pressure Sensor</h5>
+                        </div>
+                        <div class="card-body">
+                          <div class="d-flex align-items-center justify-content-center">
+                            <h4 class="mb-0 text-success"><span id="pressure-value">1.0</span> psi</h4>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div class="mt-3">
@@ -190,6 +255,13 @@ def dashboard():
           const historyPointsElement = document.getElementById('history-points');
           const inflowRateElement = document.getElementById('inflow-rate');
           const outflowRateElement = document.getElementById('outflow-rate');
+          const inflowValveElement = document.getElementById('inflow-valve');
+          const outflowValveElement = document.getElementById('outflow-valve');
+          const inflowValveIndicator = document.getElementById('inflow-valve-indicator');
+          const outflowValveIndicator = document.getElementById('outflow-valve-indicator');
+          const inflowMessageElement = document.getElementById('inflow-message');
+          const outflowMessageElement = document.getElementById('outflow-message');
+          const pressureElement = document.getElementById('pressure-value');
           const controlProgressElement = document.getElementById('control-progress');
           const systemStatusEl = document.getElementById('system-status');
           const systemStatusAlert = document.getElementById('system-status-alert');
@@ -282,9 +354,36 @@ def dashboard():
                 const currentTime = new Date().toLocaleTimeString();
                 updateTimeElement.innerText = currentTime;
                 
-                // Get real inflow/outflow values from API
-                inflowRateElement.innerText = data.inflow.toFixed(1);
-                outflowRateElement.innerText = data.outflow.toFixed(1);
+                // Get real inflow/outflow and pressure values from API
+                inflowRateElement.innerText = data.inflow.toFixed(2);
+                outflowRateElement.innerText = data.outflow.toFixed(2);
+                
+                // Update valve positions
+                const inflowValvePos = data.inflow_valve_position;
+                const outflowValvePos = data.outflow_valve_position;
+                
+                inflowValveElement.innerText = inflowValvePos.toFixed(2);
+                outflowValveElement.innerText = outflowValvePos.toFixed(2);
+                
+                // Update valve position indicators
+                const inflowPercent = Math.round(inflowValvePos * 100);
+                const outflowPercent = Math.round(outflowValvePos * 100);
+                
+                inflowValveIndicator.style.width = `${inflowPercent}%`;
+                inflowValveIndicator.innerText = `${inflowPercent}% Open`;
+                inflowValveIndicator.setAttribute('aria-valuenow', inflowPercent);
+                
+                outflowValveIndicator.style.width = `${outflowPercent}%`;
+                outflowValveIndicator.innerText = `${outflowPercent}% Open`;
+                outflowValveIndicator.setAttribute('aria-valuenow', outflowPercent);
+                
+                // Display controller message from API
+                inflowMessageElement.innerText = data.controller_message || 'No controller status';
+                
+                // Display outflow message from API
+                outflowMessageElement.innerText = data.outflow_message || 'Random outflow enabled';
+                
+                pressureElement.innerText = data.pressure.toFixed(1);
                 
                 // Update system status display
                 systemStatusEl.innerText = data.system_status || "Running";
@@ -425,7 +524,8 @@ def dashboard():
 
 @app.route('/api/water-level')
 def api_water_level():
-    global history, timestamps, tank_inflow, tank_outflow, system_status, is_emergency
+    global history, timestamps, tank_inflow, tank_outflow, system_status, is_emergency, pressure
+    global inflow_valve_position, outflow_valve_position, controller_status, outflow_status
     
     return jsonify({
         'level': water_level,
@@ -434,7 +534,12 @@ def api_water_level():
         'inflow': tank_inflow,
         'outflow': tank_outflow,
         'system_status': system_status,
-        'is_emergency': is_emergency
+        'is_emergency': is_emergency,
+        'pressure': pressure,
+        'inflow_valve_position': inflow_valve_position,
+        'outflow_valve_position': outflow_valve_position,
+        'controller_message': controller_status,
+        'outflow_message': outflow_status
     })
 
 
@@ -445,10 +550,41 @@ def api_water_level():
 system_status = "Running"
 is_emergency = False
 
-def update_water_level(new_level, inflow=None, outflow=None, emergency_state=False):
-    global water_level, history, timestamps, tank_inflow, tank_outflow, system_status, is_emergency
+def update_water_level(new_level, inflow=None, outflow=None, emergency_state=False, new_pressure=None, 
+                     new_inflow_valve=None, new_outflow_valve=None, controller_message=None, outflow_message=None):
+    global water_level, history, timestamps, tank_inflow, tank_outflow, controller_status, outflow_status
+    global system_status, is_emergency, pressure, inflow_valve_position, outflow_valve_position
+    
     water_level = new_level
     
+    # Update pressure if provided, otherwise calculate from water level
+    if new_pressure is not None:
+        pressure = new_pressure
+    else:
+        # Simple pressure calculation (similar to the one in water_tank.py)
+        pressure = new_level * 0.1
+    
+    # Update valve positions if provided
+    if new_inflow_valve is not None:
+        inflow_valve_position = new_inflow_valve
+    else:
+        # Calculate valve position from flow rate
+        inflow_valve_position = min(1.0, max(0.0, inflow / 5.0)) if inflow is not None else inflow_valve_position
+        
+    if new_outflow_valve is not None:
+        outflow_valve_position = new_outflow_valve
+    else:
+        # Calculate valve position from flow rate
+        outflow_valve_position = min(1.0, max(0.0, outflow / 5.0)) if outflow is not None else outflow_valve_position
+    
+    # Update controller message if provided
+    if controller_message is not None:
+        controller_status = controller_message
+        
+    # Update outflow message if provided
+    if outflow_message is not None:
+        outflow_status = outflow_message
+        
     # Update emergency flag and system status
     is_emergency = emergency_state
     if emergency_state:

@@ -16,23 +16,61 @@ def simulation_loop(tank):
         if emergency_stop_flag:
             # Still update the UI with current level during emergency stop
             current_level = tank.update(dt=1)
-            update_water_level(current_level, tank.inflow, tank.outflow, emergency_state=True)
+            current_pressure = tank.get_pressure()
+            inflow_valve = tank.get_inflow_valve_position()
+            outflow_valve = tank.get_outflow_valve_position()
+            outflow_message = tank.get_last_outflow_event()
+            
+            update_water_level(current_level, 
+                              tank.inflow, 
+                              tank.outflow, 
+                              emergency_state=True, 
+                              new_pressure=current_pressure,
+                              new_inflow_valve=inflow_valve,
+                              new_outflow_valve=outflow_valve,
+                              controller_message="EMERGENCY STOP ACTIVE - Controller disabled",
+                              outflow_message=outflow_message)
             time.sleep(1)
             continue
             
         # Normal operation mode
         # Update water tank state
         current_level = tank.update(dt=1)
+        current_pressure = tank.get_pressure()
+        inflow_valve = tank.get_inflow_valve_position()
+        outflow_valve = tank.get_outflow_valve_position()
         
-        # Log water level
-        print(f"Water Tank Level: {current_level:.1f}")
+        # Log water level, pressure, and valve positions
+        print(f"Water Tank Level: {current_level:.1f}, Pressure: {current_pressure:.1f} psi")
+        print(f"Valve Positions - Inflow: {inflow_valve:.2f}, Outflow: {outflow_valve:.2f}")
         
-        # Update UI with level and flow rates
-        update_water_level(current_level, tank.inflow, tank.outflow, emergency_state=False)
+        # Get controller message
+        if simulation_controller:
+            controller_message = simulation_controller.get_last_message()
+        else:
+            controller_message = "No active controller"
+            
+        # Get last outflow event message
+        outflow_message = tank.get_last_outflow_event()
+            
+        # Update UI with all sensor readings, actuator positions, and messages
+        update_water_level(current_level, 
+                          tank.inflow, 
+                          tank.outflow, 
+                          emergency_state=False, 
+                          new_pressure=current_pressure,
+                          new_inflow_valve=inflow_valve,
+                          new_outflow_valve=outflow_valve,
+                          controller_message=controller_message,
+                          outflow_message=outflow_message)
         
-        # Basic safety check
+        # Basic safety checks
         if current_level <= 0 or current_level >= tank.capacity:
             log_anomaly(f"Tank level out of bounds: {current_level}")
+            
+        # Check pressure threshold (assuming maximum safe pressure is 10 psi)
+        if current_pressure > 10.0:
+            log_anomaly(f"Pressure exceeded safe threshold: {current_pressure:.1f} psi")
         
         time.sleep(1)
 
@@ -42,6 +80,7 @@ emergency_stop_flag = False
 simulation_controller = None
 simulation_tank = None
 system_status = "Running"
+
 
 # Emergency stop and resume handlers for Flask
 @app.route('/api/emergency-stop', methods=['POST'])
@@ -119,6 +158,7 @@ def get_system_status():
         'emergency_stop': emergency_stop_flag
     })
 
+
 def main():
     global simulation_controller, simulation_tank, emergency_stop_flag, system_status
     
@@ -134,8 +174,8 @@ def main():
     emergency_stop_flag = False
     system_status = "Running"
     
-    # Initialize the water tank simulation with random outflow
-    tank = WaterTank(capacity=100.0, initial_level=10.0, random_outflow=False)
+    # Initialize the water tank simulation with random outflow enabled
+    tank = WaterTank(capacity=100.0, initial_level=10.0, random_outflow=True)
     simulation_tank = tank
     
     # Start the control logic
