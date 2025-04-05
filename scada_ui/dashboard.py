@@ -41,6 +41,14 @@ timestamps = [current_time] * 5  # Pre-populate with initial timestamps
 history = [water_level] * 5  # Pre-populate with initial water level
 actual_history = [actual_water_level] * 5  # History of actual water levels
 MAX_HISTORY = 30  # Set history size to 30 data points
+has_tank_exploded = False  # Flag to track tank explosion state
+
+# Function to update tank explosion status from main.py
+def update_tank_explosion_status(status):
+    global has_tank_exploded
+    has_tank_exploded = status
+    if status:
+        print("*** DASHBOARD NOTIFIED: TANK EXPLOSION DETECTED ***")
 
 # Clear log file at startup to remove old events
 def clear_old_log_entries():
@@ -60,7 +68,7 @@ def dashboard():
     <!DOCTYPE html>
     <html>
       <head>
-        <title>Week 1 - Water Tank Simulation</title>
+        <title>Water Tank Simulation</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -185,6 +193,24 @@ def dashboard():
                   <div class="chart-container">
                     <canvas id="chart"></canvas>
                   </div>
+                  <div class="text-center mt-3">
+                    <div class="card border-info">
+                      <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Sensor Discrepancy</h5>
+                      </div>
+                      <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-center">
+                          <span class="fw-bold me-2">Level Difference:</span>
+                          <span id="level-difference" class="fs-4 fw-bold">0.00</span>
+                          <span class="ms-2">units</span>
+                        </div>
+                        <div class="progress mt-2" style="height: 10px;">
+                          <div id="difference-bar" class="progress-bar bg-info" style="width: 50%"></div>
+                        </div>
+                        <small class="text-muted d-block mt-1">(Reported value minus actual value)</small>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -300,6 +326,7 @@ def dashboard():
           const controlProgressElement = document.getElementById('control-progress');
           const systemStatusEl = document.getElementById('system-status');
           const systemStatusAlert = document.getElementById('system-status-alert');
+          const levelDifferenceElement = document.getElementById('level-difference');
 
           // Create tank markers for main tank
           const tankMarkers = document.getElementById('tank-markers');
@@ -388,8 +415,17 @@ def dashboard():
           // Update function
           function updateDashboard() {
             fetch('/api/water-level')
-              .then(response => response.json())
+              .then(response => {
+                  console.log("API response status:", response.status);
+                  return response.json();
+              })
               .then(data => {
+                  console.log("API data received:", data);
+                  // Check if data exists
+                  if (!data) {
+                    console.error("No data received from API");
+                    return;
+                  }
                 // Get reported and actual water levels
                 const reportedLevel = data.level;
                 const actualLevel = data.actual_level;
@@ -406,8 +442,56 @@ def dashboard():
                 actualWaterLine.style.bottom = `${actualHeight}%`;
                 actualLevelElement.innerText = actualLevel.toFixed(2);
                 
+                // Calculate and display the difference between reported and actual levels
+                const levelDifference = reportedLevel - actualLevel;
+                const absDifference = Math.abs(levelDifference);
+                
+                // Format the difference with sign and color
+                if (levelDifference > 0) {
+                    levelDifferenceElement.innerText = "+" + levelDifference.toFixed(2);
+                    levelDifferenceElement.className = "fs-4 fw-bold text-danger"; // Positive difference (reported > actual)
+                } else if (levelDifference < 0) {
+                    levelDifferenceElement.innerText = levelDifference.toFixed(2); // Already has negative sign
+                    levelDifferenceElement.className = "fs-4 fw-bold text-primary"; // Negative difference (reported < actual)
+                } else {
+                    levelDifferenceElement.innerText = levelDifference.toFixed(2);
+                    levelDifferenceElement.className = "fs-4 fw-bold text-success"; // No difference
+                }
+                
+                // Update the progress bar to visualize the difference
+                const differenceBar = document.getElementById('difference-bar');
+                const cardElement = levelDifferenceElement.closest('.card');
+                const headerElement = cardElement.querySelector('.card-header');
+                
+                // Set the progress bar width based on the difference (centered at 50% for zero)
+                const barWidth = 50 + (levelDifference * 2); // Scale for better visibility
+                const clampedWidth = Math.max(0, Math.min(100, barWidth)); // Clamp between 0-100%
+                differenceBar.style.width = clampedWidth + '%';
+                
+                // Change the card styling based on the magnitude of difference
+                if (absDifference > 15) {
+                    differenceBar.className = "progress-bar bg-danger";
+                    cardElement.className = "card border-danger";
+                    headerElement.className = "card-header bg-danger text-white";
+                    headerElement.innerHTML = '<h5 class="mb-0">Critical Sensor Discrepancy</h5>';
+                } else if (absDifference > 7) {
+                    differenceBar.className = "progress-bar bg-warning";
+                    cardElement.className = "card border-warning";
+                    headerElement.className = "card-header bg-warning text-dark";
+                    headerElement.innerHTML = '<h5 class="mb-0">Significant Sensor Discrepancy</h5>';
+                } else if (absDifference > 2) {
+                    differenceBar.className = "progress-bar bg-info";
+                    cardElement.className = "card border-info";
+                    headerElement.className = "card-header bg-info text-white";
+                    headerElement.innerHTML = '<h5 class="mb-0">Sensor Discrepancy</h5>';
+                } else {
+                    differenceBar.className = "progress-bar bg-success";
+                    cardElement.className = "card border-success";
+                    headerElement.className = "card-header bg-success text-white";
+                    headerElement.innerHTML = '<h5 class="mb-0">Sensor Alignment</h5>';
+                }
+                
                 // Debug info about levels
-                const levelDifference = Math.abs(reportedLevel - actualLevel);
                 if (data.is_replay_active) {
                     // Just log to console for debugging, no visual warning
                     console.log(`Replay active - Reported: ${reportedLevel.toFixed(2)}, Actual: ${actualLevel.toFixed(2)}, Diff: ${levelDifference.toFixed(2)}`);
@@ -446,7 +530,44 @@ def dashboard():
                 // Display outflow message from API
                 outflowMessageElement.innerText = data.outflow_message || 'Random outflow enabled';
                 
-                pressureElement.innerText = data.pressure.toFixed(1);
+                // Update pressure and change background color based on pressure level
+                const pressure = data.pressure;
+                pressureElement.innerText = pressure.toFixed(1);
+                
+                // Change pressure indicator color based on pressure level
+                const pressureCard = document.querySelector('.card.border-success');
+                if (pressure > 25) {
+                    pressureCard.className = 'card mb-3 border-danger';
+                    pressureCard.querySelector('.card-header').className = 'card-header bg-danger text-white';
+                    pressureElement.className = 'mb-0 text-danger';
+                    // Add flashing effect for critical pressure
+                    if (pressure > 28) {
+                        document.body.style.backgroundColor = Math.random() > 0.5 ? '#ffe6e6' : '#f8f9fa';
+                    }
+                } else if (pressure > 15) {
+                    pressureCard.className = 'card mb-3 border-warning';
+                    pressureCard.querySelector('.card-header').className = 'card-header bg-warning text-dark';
+                    pressureElement.className = 'mb-0 text-warning';
+                } else {
+                    pressureCard.className = 'card mb-3 border-success';
+                    pressureCard.querySelector('.card-header').className = 'card-header bg-success text-white';
+                    pressureElement.className = 'mb-0 text-success';
+                }
+                
+                // Check for tank explosion
+                if (data.has_exploded) {
+                    // Apply explosion effects
+                    document.body.style.backgroundColor = '#ff0000';
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger text-center mt-3';
+                    alertDiv.style.fontSize = '24px';
+                    alertDiv.innerHTML = '<strong>🚨 CATASTROPHIC FAILURE: TANK EXPLOSION 🚨</strong><br>Tank has exploded due to excessive pressure!';
+                    
+                    // Insert at top of page if not already present
+                    if (!document.querySelector('.alert:contains("CATASTROPHIC FAILURE")')) {
+                        document.querySelector('.dashboard-container').prepend(alertDiv);
+                    }
+                }
                 
                 // Update system status display
                 systemStatusEl.innerText = data.system_status || "Running";
@@ -499,8 +620,17 @@ def dashboard():
           waterElement.style.height = `${Math.min(Math.max(waterLevel, 0), 100)}%`;
           updateTimeElement.innerText = new Date().toLocaleTimeString();
 
-          // Periodic updates
-          setInterval(updateDashboard, 1000);
+          // Initial update
+          updateDashboard();
+          
+          // Periodic updates with error handling
+          setInterval(() => {
+            try {
+              updateDashboard();
+            } catch (error) {
+              console.error("Dashboard update error:", error);
+            }
+          }, 1000);
           
           // Emergency stop button functionality
           document.getElementById('emergency-stop').addEventListener('click', function() {
@@ -590,39 +720,73 @@ def dashboard():
 def api_water_level():
     global history, actual_history, timestamps, tank_inflow, tank_outflow, system_status, is_emergency, pressure
     global inflow_valve_position, outflow_valve_position, controller_status, outflow_status
-    global is_replay_active, actual_water_level, water_level
+    global is_replay_active, actual_water_level, water_level, has_tank_exploded
     
-    # Always get the current actual level directly from the tank model
-    true_tank_level = api_get_true_water_level()
-    
-    # During replay attack, we keep the water_level (reported) and actual_water_level separate
-    if is_replay_active:
-        # Update actual_water_level only
-        actual_water_level = true_tank_level
-        # Do NOT update water_level, as the replay attack will set it
-    
-    # Print debug info
-    print(f"[API] Serving water level API endpoint")
-    print(f"[API] is_replay_active={is_replay_active}")
-    print(f"[API] water_level (reported)={water_level:.2f}, actual_water_level={actual_water_level:.2f}")
-    
-    response_data = {
-        'level': water_level,  # Reported level (may be manipulated)
-        'actual_level': actual_water_level,  # Actual physical level
-        'history': history,
-        'actual_history': actual_history,
-        'timestamps': timestamps,
-        'inflow': tank_inflow,
-        'outflow': tank_outflow,
-        'system_status': system_status,
-        'is_emergency': is_emergency,
-        'pressure': pressure,
-        'inflow_valve_position': inflow_valve_position,
-        'outflow_valve_position': outflow_valve_position,
-        'controller_message': controller_status,
-        'outflow_message': outflow_status,
-        'is_replay_active': is_replay_active
-    }
+    try:
+        # Always get the current actual level directly from the tank model
+        true_tank_level = api_get_true_water_level()
+        
+        # During replay attack, we keep the water_level (reported) and actual_water_level separate
+        if is_replay_active:
+            # Update actual_water_level only
+            actual_water_level = true_tank_level
+            # Do NOT update water_level, as the replay attack will set it
+        
+        # Print debug info
+        print(f"[API] Serving water level API endpoint")
+        print(f"[API] is_replay_active={is_replay_active}")
+        print(f"[API] water_level (reported)={water_level:.2f}, actual_water_level={actual_water_level:.2f}")
+        
+        # Use the global flag to check if tank has exploded
+        has_exploded = has_tank_exploded
+        
+        # Make sure we always have valid data
+        if not isinstance(history, list):
+            history = [water_level] * 5
+        if not isinstance(actual_history, list):
+            actual_history = [actual_water_level] * 5
+        if not isinstance(timestamps, list):
+            timestamps = [datetime.now().strftime('%H:%M:%S')] * 5
+            
+        response_data = {
+            'level': float(water_level),  # Reported level (may be manipulated)
+            'actual_level': float(actual_water_level),  # Actual physical level
+            'history': history,
+            'actual_history': actual_history,
+            'timestamps': timestamps,
+            'inflow': float(tank_inflow),
+            'outflow': float(tank_outflow),
+            'system_status': str(system_status),
+            'is_emergency': bool(is_emergency),
+            'pressure': float(pressure),
+            'inflow_valve_position': float(inflow_valve_position),
+            'outflow_valve_position': float(outflow_valve_position),
+            'controller_message': str(controller_status),
+            'outflow_message': str(outflow_status),
+            'is_replay_active': bool(is_replay_active),
+            'has_exploded': bool(has_exploded)
+        }
+    except Exception as e:
+        print(f"[API] Error in water level API: {e}")
+        # Provide fallback values in case of error
+        response_data = {
+            'level': 50.0,
+            'actual_level': 50.0,
+            'history': [50.0] * 10,
+            'actual_history': [50.0] * 10,
+            'timestamps': [datetime.now().strftime('%H:%M:%S')] * 10,
+            'inflow': 0.0,
+            'outflow': 0.0,
+            'system_status': "Error",
+            'is_emergency': False,
+            'pressure': 5.0,
+            'inflow_valve_position': 0.0,
+            'outflow_valve_position': 0.0,
+            'controller_message': f"Error: {str(e)}",
+            'outflow_message': "Error",
+            'is_replay_active': False,
+            'has_exploded': False
+        }
     
     return jsonify(response_data)
 

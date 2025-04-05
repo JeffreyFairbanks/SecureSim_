@@ -11,71 +11,92 @@ def simulation_loop(tank):
     """Simplified simulation loop for Week 1"""
     global emergency_stop_flag
     
-    while True:  # Run indefinitely, handle emergency stop within the loop
-        # Check if in emergency stop mode
-        if emergency_stop_flag:
-            # Still update the UI with current level during emergency stop
+    try:
+        while True:  # Run indefinitely, handle emergency stop within the loop
+            # Check if in emergency stop mode
+            if emergency_stop_flag:
+                # Still update the UI with current level during emergency stop
+                current_level = tank.update(dt=1)
+                current_pressure = tank.get_pressure()
+                inflow_valve = tank.get_inflow_valve_position()
+                outflow_valve = tank.get_outflow_valve_position()
+                outflow_message = tank.get_last_outflow_event()
+                
+                update_water_level(current_level, 
+                                  tank.inflow, 
+                                  tank.outflow, 
+                                  emergency_state=True, 
+                                  new_pressure=current_pressure,
+                                  new_inflow_valve=inflow_valve,
+                                  new_outflow_valve=outflow_valve,
+                                  controller_message="EMERGENCY STOP ACTIVE - Controller disabled",
+                                  outflow_message=outflow_message)
+                time.sleep(1)
+                continue
+                
+            # Normal operation mode
+            # Update water tank state
             current_level = tank.update(dt=1)
             current_pressure = tank.get_pressure()
             inflow_valve = tank.get_inflow_valve_position()
             outflow_valve = tank.get_outflow_valve_position()
-            outflow_message = tank.get_last_outflow_event()
             
+            # Log water level, pressure, and valve positions
+            print(f"Water Tank Level: {current_level:.1f}, Pressure: {current_pressure:.1f} psi")
+            print(f"Valve Positions - Inflow: {inflow_valve:.2f}, Outflow: {outflow_valve:.2f}")
+            
+            # Get controller message
+            if simulation_controller:
+                controller_message = simulation_controller.get_last_message()
+            else:
+                controller_message = "No active controller"
+                
+            # Get last outflow event message
+            outflow_message = tank.get_last_outflow_event()
+                
+            # Update UI with all sensor readings, actuator positions, and messages
             update_water_level(current_level, 
                               tank.inflow, 
                               tank.outflow, 
-                              emergency_state=True, 
+                              emergency_state=False, 
                               new_pressure=current_pressure,
                               new_inflow_valve=inflow_valve,
                               new_outflow_valve=outflow_valve,
-                              controller_message="EMERGENCY STOP ACTIVE - Controller disabled",
+                              controller_message=controller_message,
                               outflow_message=outflow_message)
-            time.sleep(1)
-            continue
+                              
+            # Debug print the levels for comparison
+            print_levels()
             
-        # Normal operation mode
-        # Update water tank state
-        current_level = tank.update(dt=1)
-        current_pressure = tank.get_pressure()
-        inflow_valve = tank.get_inflow_valve_position()
-        outflow_valve = tank.get_outflow_valve_position()
-        
-        # Log water level, pressure, and valve positions
-        print(f"Water Tank Level: {current_level:.1f}, Pressure: {current_pressure:.1f} psi")
-        print(f"Valve Positions - Inflow: {inflow_valve:.2f}, Outflow: {outflow_valve:.2f}")
-        
-        # Get controller message
-        if simulation_controller:
-            controller_message = simulation_controller.get_last_message()
-        else:
-            controller_message = "No active controller"
+            # Basic safety checks
+            if current_level <= 0 or current_level >= tank.capacity:
+                log_anomaly(f"Tank level out of bounds: {current_level}")
+                
+            # Check pressure threshold (assuming maximum safe pressure is 10 psi)
+            if current_pressure > 10.0:
+                log_anomaly(f"Pressure exceeded safe threshold: {current_pressure:.1f} psi")
+                
+            # Check if tank has exploded
+            if hasattr(tank, 'has_exploded') and tank.has_exploded:
+                emergency_stop_flag = True
+                system_status = "CATASTROPHIC FAILURE: TANK EXPLOSION"
+                log_anomaly("CATASTROPHIC FAILURE: Tank has exploded due to excessive pressure!")
+                
+                # Allow Ctrl+C to work during explosion
+                try:
+                    time.sleep(1)  # Short sleep to allow interruption
+                except KeyboardInterrupt:
+                    print("Explosion simulation terminated by user.")
+                    return
             
-        # Get last outflow event message
-        outflow_message = tank.get_last_outflow_event()
-            
-        # Update UI with all sensor readings, actuator positions, and messages
-        update_water_level(current_level, 
-                          tank.inflow, 
-                          tank.outflow, 
-                          emergency_state=False, 
-                          new_pressure=current_pressure,
-                          new_inflow_valve=inflow_valve,
-                          new_outflow_valve=outflow_valve,
-                          controller_message=controller_message,
-                          outflow_message=outflow_message)
-                          
-        # Debug print the levels for comparison
-        print_levels()
-        
-        # Basic safety checks
-        if current_level <= 0 or current_level >= tank.capacity:
-            log_anomaly(f"Tank level out of bounds: {current_level}")
-            
-        # Check pressure threshold (assuming maximum safe pressure is 10 psi)
-        if current_pressure > 10.0:
-            log_anomaly(f"Pressure exceeded safe threshold: {current_pressure:.1f} psi")
-        
-        time.sleep(1)
+            try:
+                time.sleep(1)
+            except KeyboardInterrupt:
+                print("Simulation terminated by user.")
+                return
+    except KeyboardInterrupt:
+        print("Simulation terminated by user.")
+        return
 
 
 # Global variables for control functionality

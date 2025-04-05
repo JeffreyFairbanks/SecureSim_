@@ -1,30 +1,4 @@
-
 # SecureSim: Industrial Control System Security Simulator
-
-A realistic simulation platform for industrial water tank control systems with built-in cybersecurity attack capabilities and visualization.
-
-## Overview
-
-SecureSim provides an educational environment for understanding SCADA/ICS security vulnerabilities. It combines a realistic water tank model with controls, a monitoring dashboard, and attack simulations for security training and testing.
-
-### Security Testing Features
-
-This simulation includes a simple but realistic **replay attack** capability that demonstrates a common SCADA system vulnerability:
-
-- **Record and Replay**: Records normal system operation patterns and replays them while hiding actual system changes
-- **Dual Visualization**: Dashboard shows both reported (manipulated) and actual values side-by-side
-- **Real-time Comparison**: Track divergence between reported and actual system state
-- **Educational Platform**: Ideal for cybersecurity training, demonstrations, and research
-
-### Core Functionality
-
-The system provides:
-
-1. A simulated water tank with inflow/outflow dynamics
-2. Sensors (water level, pressure) and actuators (inflow valve, outflow valve)
-3. Basic control logic to maintain water level setpoint
-4. A web-based dashboard for monitoring and control
-5. Emergency stop functionality
 
 ## Components
 
@@ -53,7 +27,7 @@ This mode helps simulate unpredictable external factors affecting the system, te
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/SecureSim.git
+git clone https://github.com/JeffreyFairbanks/SecureSim_.git
 cd SecureSim
 
 # Create and activate a virtual environment (recommended)
@@ -80,13 +54,13 @@ python main.py --random-outflow
 
 Once running, open your browser and visit: `http://127.0.0.1:5000/`
 
-For attack simulation instructions, see the "Running the Replay Attack Simulation" section below.
+## Running the Attack Simulations
 
-## Running the Replay Attack Simulation
+### Replay Attack
 
 The system includes a simplified SCADA replay attack implementation that demonstrates a common industrial control system vulnerability.
 
-### Step 1: Start the Simulation
+#### Step 1: Start the Simulation
 
 Start the water tank simulation with random outflow enabled:
 
@@ -94,7 +68,7 @@ Start the water tank simulation with random outflow enabled:
 python main.py --random-outflow
 ```
 
-### Step 2: Record Normal System Behavior
+#### Step 2: Record Normal System Behavior
 
 In a separate terminal, record normal system behavior:
 
@@ -104,7 +78,7 @@ python attacks/simple_replay.py record --duration 30
 
 This will record 30 seconds of normal system operation and save it to the `data/recorded_data.json` file.
 
-### Step 3: Launch the Replay Attack
+#### Step 3: Launch the Replay Attack
 
 After recording is complete, launch the replay attack:
 
@@ -114,13 +88,22 @@ python attacks/simple_replay.py replay
 
 This will replay the recorded data in a loop, causing the dashboard to show repeated patterns of normal operation while the actual system continues to change.
 
+### False Data Injection Attack
+
+False data injection attacks manipulate sensor readings according to specific patterns designed to achieve particular objectives.
+
+**Drift Attack**: Gradually shifts the reported level away from the actual value (subtle, harder to detect).
+   ```bash
+   python attacks/false_data_injection.py --offset 10
+   ```
+
 ## Project Structure
 
 ```
 SecureSim_/
 ├── attacks/         # Attack simulations
-│   ├── simple_replay.py # Simplified SCADA replay attack
-│   └── replay_attack.py # Advanced replay attack implementation
+│   ├── simple_replay.py      # Simplified SCADA replay attack
+│   └── false_data_injection.py # False data injection attack
 ├── control_logic/   # Control system logic
 │   └── control.py   # Proportional controller
 ├── data/            # Log files and attack recordings

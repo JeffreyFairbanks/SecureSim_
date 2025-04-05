@@ -18,6 +18,10 @@ class WaterTank:
         self.random_outflow_thread = None
         self.pressure = 0.0  # Initialize pressure value
         self.last_outflow_event = "No outflow events yet"
+        self.critical_pressure = 30.0  # Critical pressure threshold in psi
+        self.has_exploded = False  # Tank explosion state
+        self.pressure_increasing = False  # Flag to simulate pressure increase
+        self.pressure_increase_rate = 1.0  # PSI per second when increasing
         
         # Start random outflow thread if enabled
         if random_outflow:
@@ -26,6 +30,11 @@ class WaterTank:
     def update(self, dt=1.0):
         """Update water level based on inflow and outflow rates"""
         with self.lock:
+            # If tank has exploded, no further updates
+            if self.has_exploded:
+                self.level = 0.0  # Tank is empty after explosion
+                return self.level
+            
             # Calculate level change
             change = self.inflow - self.outflow
             self.level += change * dt
@@ -33,9 +42,66 @@ class WaterTank:
             # Ensure level stays within bounds
             self.level = max(0, min(self.capacity, self.level))
             
-            # Update pressure (simple calculation based on water level)
-            self.pressure = self.level * 0.1  # Simplified pressure calculation
+            # Check if tank is at maximum capacity
+            if self.level >= self.capacity:
+                # Start runaway pressure increase
+                self.pressure_increasing = True
+                print(f"WARNING: Tank at maximum capacity! Pressure building...")
+            
+            # Update pressure
+            if self.pressure_increasing:
+                # Pressure increases independently of level when tank is at max capacity
+                self.pressure += self.pressure_increase_rate * dt
+                print(f"DANGER: Pressure rising! Current pressure: {self.pressure:.1f} psi")
+                
+                # Check if pressure exceeds critical threshold
+                if self.pressure >= self.critical_pressure and not self.has_exploded:
+                    self.tank_explosion()
+            else:
+                # Normal pressure calculation based on water level
+                self.pressure = self.level * 0.1  # Simplified pressure calculation
+            
             return self.level
+            
+    def tank_explosion(self):
+        """Simulate tank explosion when pressure exceeds critical threshold"""
+        with self.lock:
+            self.has_exploded = True
+            self.level = 0  # Tank empties completely
+            self.inflow = 0  # Inflow stops
+            self.outflow = 0  # Outflow stops
+            self.inflow_valve_position = 0
+            self.outflow_valve_position = 0
+            
+            print("\n" + "!" * 80)
+            print("!!! CATASTROPHIC FAILURE: TANK EXPLOSION !!!")
+            print("Tank has exploded due to excessive pressure!")
+            print("All systems offline. Tank contents lost.")
+            print("!" * 80 + "\n")
+            
+            # Notify the dashboard of the explosion
+            try:
+                # Avoid importing main.py which would cause circular imports
+                from scada_ui.dashboard import update_tank_explosion_status
+                update_tank_explosion_status(True)
+            except ImportError:
+                print("Failed to notify dashboard of explosion")
+            
+            # Don't hang the program - allow normal termination
+            import sys
+            import threading
+            
+            # Create a shutdown timer to terminate the program after a brief delay
+            def emergency_shutdown():
+                print("\nSYSTEM SHUTDOWN: Emergency exit initiated due to catastrophic failure...")
+                # Give the user 5 seconds to see what happened then exit
+                time.sleep(5)
+                sys.exit(1)
+            
+            # Run the emergency shutdown in a separate thread to not block main thread
+            shutdown_thread = threading.Thread(target=emergency_shutdown)
+            shutdown_thread.daemon = True  # Daemon thread will exit when main thread exits
+            shutdown_thread.start()
 
     def set_inflow(self, rate):
         """Set the inflow rate in units per second by adjusting the inflow valve actuator"""

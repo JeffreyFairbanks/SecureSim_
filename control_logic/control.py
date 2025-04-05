@@ -25,8 +25,17 @@ class Controller:
         while self.running:
             # Only control automatically if manual control is disabled
             if not self.manual_control:
-                # Get current tank level
-                current_level = self.tank.get_level()
+                # Instead of using the tank's get_level() method directly,
+                # we need to use the dashboard's reported level
+                # This way, the controller will respond to the reported level (which could be falsified)
+                # rather than the actual level
+                try:
+                    # Import here to avoid circular imports
+                    from scada_ui.dashboard import water_level as reported_level
+                    current_level = reported_level
+                except ImportError:
+                    # Fallback to the tank's actual level if there's an issue
+                    current_level = self.tank.get_level()
                 
                 # Calculate error (difference from setpoint)
                 error = self.setpoint - current_level
@@ -42,7 +51,7 @@ class Controller:
                 
                 # Generate control message for UI display
                 self.last_control_message = f"Adjusting inflow valve based on level error of {error:.2f}"
-                print(f"Controller: {self.last_control_message}")
+                print(f"Controller: {self.last_control_message} (reported level: {current_level:.2f})")
                 
                 # Outflow is handled by random outflow feature if enabled
                 # Otherwise use a constant outflow by setting the outflow valve actuator
