@@ -49,7 +49,7 @@ python main.py
 Start with random outflow variations (more realistic):
 
 ```bash
-python main.py --random-outflow
+python main.py --random_outflow
 ```
 
 Once running, open your browser and visit: `http://127.0.0.1:5000/`
@@ -65,7 +65,7 @@ The system includes a simplified SCADA replay attack implementation that demonst
 Start the water tank simulation with random outflow enabled:
 
 ```bash
-python main.py --random-outflow
+python main.py --random_outflow
 ```
 
 #### Step 2: Record Normal System Behavior
