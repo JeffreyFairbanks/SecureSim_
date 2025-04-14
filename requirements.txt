@@ -2,3 +2,5 @@ Flask>=2.0
 matplotlib>=3.4.0
 numpy>=1.20.0
 requests
+hmac>=20101005  # For cryptographic functions
+jsonschema>=4.0.0  # For JSON validation

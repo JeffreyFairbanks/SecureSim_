@@ -28,7 +28,7 @@ This mode helps simulate unpredictable external factors affecting the system, te
 ```bash
 # Clone the repository
 git clone https://github.com/JeffreyFairbanks/SecureSim_.git
-cd SecureSim
+cd SecureSim_
 
 # Create and activate a virtual environment (recommended)
 python -m venv venv
@@ -52,6 +52,12 @@ Start with random outflow variations (more realistic):
 python main.py --random_outflow
 ```
 
+Start with enhanced security features enabled:
+
+```bash
+python main.py --security --random_outflow
+```
+
 Once running, open your browser and visit: `http://127.0.0.1:5000/`
 
 ## Running the Attack Simulations
@@ -66,6 +72,12 @@ Start the water tank simulation with random outflow enabled:
 
 ```bash
 python main.py --random_outflow
+```
+
+Or with security enabled:
+
+```bash
+python main.py --security --random_outflow
 ```
 
 #### Step 2: Record Normal System Behavior
@@ -101,19 +113,23 @@ False data injection attacks manipulate sensor readings according to specific pa
 
 ```
 SecureSim_/
-├── attacks/         # Attack simulations
-│   ├── simple_replay.py      # Simplified SCADA replay attack
-│   └── false_data_injection.py # False data injection attack
-├── control_logic/   # Control system logic
-│   └── control.py   # Proportional controller
-├── data/            # Log files and attack recordings
-├── process_sim/     # Physical process simulation
-│   └── water_tank.py # Water tank model with sensors/actuators
-├── scada_ui/        # Dashboard interface
-│   └── dashboard.py # Flask-based visualization UI
-├── tests/           # Unit tests
-│   └── test_water_tank.py # Tests for water tank simulation
-├── logging_defense.py # Logging and anomaly detection
-├── main.py          # Main application
-└── README.md        # Documentation
+├── attacks/            # Attack simulations
+│   ├── simple_replay.py         # Simplified SCADA replay attack
+│   └── false_data_injection.py  # False data injection attack
+├── control_logic/      # Control system logic
+│   └── control.py                # Proportional controller
+├── data/               # Log files and attack recordings
+├── defenses/           # Security defense mechanisms
+│   ├── logging_audit.py          # Enhanced logging and auditing
+│   ├── anomaly_detection.py      # Statistical and physics-based anomaly detection
+│   ├── command_authentication.py # Command validation and authentication
+├── process_sim/        # Physical process simulation
+│   └── water_tank.py             # Water tank model with sensors/actuators
+├── scada_ui/           # Dashboard interface
+│   └── dashboard.py              # Flask-based visualization UI
+├── tests/              # Unit tests
+│   └── test_water_tank.py        # Tests for water tank simulation
+├── logging_defense.py  # Basic logging and anomaly detection
+├── main.py             # Main application with optional security features
+└── README.md           # Documentation
 ```
